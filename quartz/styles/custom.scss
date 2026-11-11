@@ -520,6 +520,21 @@ body {
       font-weight: 400;
       line-height: 20px;
     }
+    // each level steps further in, so 2.3.1 reads as part of 2.3
+    &.depth-2 {
+      padding-left: 54px;
+    }
+    &.depth-3,
+    &.depth-4,
+    &.depth-5 {
+      padding-left: 70px;
+    }
+    &.depth-2 > a,
+    &.depth-3 > a,
+    &.depth-4 > a,
+    &.depth-5 > a {
+      font-size: 0.78125rem;
+    }
     &:has(+ li.depth-0) {
       padding-bottom: 28px;
     }

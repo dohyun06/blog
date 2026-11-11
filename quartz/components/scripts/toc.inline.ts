@@ -59,6 +59,22 @@ function setupRail() {
       }
       list.style.setProperty("--track", `${ys[ys.length - 1] - ys[0]}px`)
       list.style.setProperty("--fill", `${y - ys[0]}px`)
+      const sidebar = list.closest<HTMLElement>(".sidebar")
+      if (sidebar) {
+        // the sticky sidebar shares a grid with the footer, so it gives way as the footer scrolls in
+        const footer = document.querySelector("#quartz-body footer")
+        const limit = Math.min(innerHeight, footer?.getBoundingClientRect().top ?? innerHeight)
+        sidebar.style.maxHeight = `${Math.max(limit, 0)}px`
+        // a table of contents taller than that scrolls to keep the reading position in view
+        if (sidebar.scrollHeight > sidebar.clientHeight) {
+          const head =
+            list.getBoundingClientRect().top -
+            sidebar.getBoundingClientRect().top +
+            sidebar.scrollTop +
+            y
+          sidebar.scrollTop = head - sidebar.clientHeight / 2
+        }
+      }
     }
     update()
     addEventListener("scroll", update, { passive: true })
