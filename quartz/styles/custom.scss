@@ -739,6 +739,71 @@ figure[data-rehype-pretty-code-figure] {
   }
 }
 
+// ---------- tag index ----------
+.tag-index {
+  & .summary {
+    margin: 0 0 32px;
+    color: var(--darkgray);
+    font-size: 0.875rem;
+  }
+  & ul {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 32px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    @media all and ($narrow) {
+      grid-template-columns: 1fr;
+    }
+  }
+  & li {
+    margin: 0;
+    padding: 18px 0;
+    border-top: 1px solid var(--lightgray);
+  }
+  & li > a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--dark);
+    &:hover strong {
+      color: var(--secondary);
+    }
+  }
+  & strong {
+    font-size: 1.0625rem;
+    font-weight: 700;
+  }
+  & .parent {
+    color: var(--gray);
+    font-weight: 500;
+  }
+  & .count {
+    margin-left: auto;
+    color: var(--darkgray);
+    font-size: 0.875rem;
+  }
+  & p {
+    margin: 6px 0 0 34px;
+    color: var(--darkgray);
+    font-size: 0.875rem;
+    & em {
+      margin-right: 8px;
+      color: var(--gray);
+      font-style: normal;
+    }
+    & a {
+      color: var(--darkgray);
+      font-weight: 500;
+      background: none;
+      &:hover {
+        color: var(--dark);
+      }
+    }
+  }
+}
+
 // ---------- previous / next ----------
 .prev-next {
   display: grid;
