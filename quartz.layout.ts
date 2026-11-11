@@ -6,7 +6,7 @@ const notHome = (page: { fileData: { slug?: string } }) => page.fileData.slug !=
 // components shared across all pages
 export const sharedPageComponents: SharedLayout = {
   head: Component.Head(),
-  header: [Component.SiteHeader(), Component.Search()],
+  header: [Component.SiteHeader(), Component.Search(), Component.Darkmode()],
   afterBody: [Component.ConditionalRender({ component: Component.PrevNext(), condition: notHome })],
   footer: Component.Footer({
     links: {

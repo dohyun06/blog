@@ -8,6 +8,9 @@ import { htmlToJsx } from "../../util/jsx"
 import { i18n } from "../../i18n"
 import { ComponentChildren } from "preact"
 import { concatenateResources } from "../../util/resources"
+import PostListConstructor from "../PostList"
+
+const PostList = PostListConstructor()
 
 interface TagContentOptions {
   sort?: SortFn
@@ -108,23 +111,8 @@ export default ((opts?: Partial<TagContentOptions>) => {
         </div>
       )
     } else {
-      const pages = allPagesWithTag(tag)
-      const listProps = {
-        ...props,
-        allFiles: pages,
-      }
-
-      return (
-        <div class="popover-hint">
-          <article class={classes}>{content}</article>
-          <div class="page-listing">
-            <p>{i18n(cfg.locale).pages.tagContent.itemsUnderTag({ count: pages.length })}</p>
-            <div>
-              <PageList {...listProps} sort={options?.sort} />
-            </div>
-          </div>
-        </div>
-      )
+      // a single tag looks like the home page with its tab selected
+      return <PostList {...props} />
     }
   }
 

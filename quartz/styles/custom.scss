@@ -29,6 +29,20 @@ $narrow: "(max-width: 1023px)";
   background: var(--lightgray);
 }
 
+:root {
+  --line-1: #0052a4;
+  --line-1-ink: #fff;
+  --code: #f6f7f9;
+  --danger: #d1323a;
+}
+// line 1 and danger red lift to stay readable on the night ground
+:root[saved-theme="dark"] {
+  --line-1: #4d90e0;
+  --line-1-ink: #0d1424;
+  --code: #151d2f;
+  --danger: #e5545b;
+}
+
 body {
   color: var(--dark);
   word-break: keep-all;
@@ -150,6 +164,26 @@ body {
   }
 }
 
+.page > header .darkmode {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  & svg {
+    position: static;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: var(--darkgray);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    transition: stroke 0.15s;
+  }
+  &:hover svg {
+    stroke: var(--secondary);
+  }
+}
+
 .page > header .search {
   flex: 0 0 auto;
   & > .search-button {
@@ -224,7 +258,8 @@ body {
     font-size: 2.25rem;
   }
 }
-body[data-slug="index"] .article-title {
+// home and single-tag pages share the post list, so they share its smaller title
+.center:has(.post-list) .article-title {
   margin-top: 0;
   font-size: 2rem;
   letter-spacing: -0.02em;
@@ -251,6 +286,9 @@ body[data-slug="index"] .article-title {
   font-size: 0.8125rem;
   font-weight: 800;
   line-height: 1;
+  &[data-n="1"] {
+    color: var(--line-1-ink);
+  }
   &[data-n="5"] {
     color: #000;
   }
@@ -332,6 +370,9 @@ body[data-slug="index"] .article-title {
     font-size: 1.625rem;
     &::before {
       @include ring(24px);
+      // a static ring paints under the absolutely positioned line, so lift it over
+      position: relative;
+      z-index: 1;
     }
     &::after {
       content: "";
@@ -408,36 +449,36 @@ body[data-slug="index"] .article-title {
 }
 
 .sidebar ul.toc-content.overflow {
+  position: relative;
   max-height: none;
   margin: 0;
   overflow: visible;
+
+  // one grey track and a blue fill, sized by toc.inline.ts from the scroll position
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    left: 9.5px;
+    top: 12px;
+    width: 5px;
+  }
+  &::before {
+    height: var(--track, 0px);
+    background: var(--lightgray);
+  }
+  &::after {
+    height: var(--fill, 0px);
+    background: var(--secondary);
+  }
 
   & > li {
     position: relative;
     margin: 0;
     padding: 0 0 28px 38px;
 
-    // line segment down to the next entry; blue once the next heading has been reached
-    &::after {
-      content: "";
-      position: absolute;
-      left: 9.5px;
-      top: 0;
-      bottom: 0;
-      width: 5px;
-      background: var(--lightgray);
-    }
-    &:first-child::after {
-      top: 12px;
-    }
     &:last-child {
       padding-bottom: 0;
-      &::after {
-        display: none;
-      }
-    }
-    &:has(+ li > a.in-view)::after {
-      background: var(--secondary);
     }
 
     & > a {
@@ -610,7 +651,7 @@ figure[data-rehype-pretty-code-figure] {
     border: 0;
     border-bottom: 1px solid var(--lightgray);
     border-radius: 8px 8px 0 0;
-    background: #f6f7f9;
+    background: var(--code);
     font-size: 0.75rem;
     & + pre {
       border-radius: 0 0 8px 8px;
@@ -621,7 +662,7 @@ figure[data-rehype-pretty-code-figure] {
 .page article pre {
   border: 0;
   border-radius: 8px;
-  background: #f6f7f9;
+  background: var(--code);
   & > code {
     padding: 14px 0 16px;
     font-size: 0.875rem;
@@ -631,7 +672,7 @@ figure[data-rehype-pretty-code-figure] {
         background: var(--highlight);
       }
       &::before {
-        color: #9ca3af;
+        color: var(--gray);
       }
     }
   }
@@ -668,7 +709,7 @@ figure[data-rehype-pretty-code-figure] {
   }
 
   &[data-callout] {
-    --color: #0052a4;
+    --color: var(--line-1);
   }
   &[data-callout="abstract"],
   &[data-callout="question"] {
@@ -676,7 +717,7 @@ figure[data-rehype-pretty-code-figure] {
   }
   &[data-callout="info"],
   &[data-callout="todo"] {
-    --color: #0052a4;
+    --color: var(--line-1);
   }
   &[data-callout="tip"],
   &[data-callout="success"] {
@@ -688,13 +729,13 @@ figure[data-rehype-pretty-code-figure] {
   &[data-callout="failure"],
   &[data-callout="danger"],
   &[data-callout="bug"] {
-    --color: #d1323a;
+    --color: var(--danger);
   }
   &[data-callout="example"] {
     --color: #996cac;
   }
   &[data-callout="quote"] {
-    --color: #4b5563;
+    --color: var(--darkgray);
   }
 }
 

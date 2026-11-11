@@ -2,7 +2,7 @@ import { QuartzPluginData } from "../plugins/vfile"
 import { FullSlug, resolveRelative } from "../util/path"
 
 // the portfolio's six metro line colours; a tag keeps its number and colour on every page
-const COLORS = ["#0052a4", "#00a84d", "#ef7c1c", "#00a5de", "#996cac", "#cd7c2f"]
+const COLORS = ["var(--line-1)", "#00a84d", "#ef7c1c", "#00a5de", "#996cac", "#cd7c2f"]
 const FIXED: Record<string, number> = { Develop: 1, Web: 2, DevOps: 3, Infoteam: 4 }
 
 export function lineOf(name: string) {
