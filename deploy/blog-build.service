@@ -1,0 +1,6 @@
+[Unit]
+Description=Build blog from the Obsidian vault
+
+[Service]
+Type=oneshot
+ExecStart=%h/blog/app/deploy/build.sh
