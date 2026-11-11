@@ -14,7 +14,7 @@ head=$(git -C "$VAULT" rev-parse HEAD)
 
 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$BLOG:$BLOG" -w "$APP" node:22-alpine sh -c '
   [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci --no-audit --no-fund
-  node scripts/collect.mjs "$0" && npx quartz build' "$VAULT"
+  node scripts/collect.mjs "$0" && node quartz/bootstrap-cli.mjs build' "$VAULT"
 
 rsync -a --delete "$APP/public/" "$BLOG/site/"
 echo "$head" > "$BLOG/.last-built"
