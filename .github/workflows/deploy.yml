@@ -39,8 +39,10 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" bash -s <<'REMOTE'
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          # fetch only touches .git; the tested build.sh updates the checkout under the build lock
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "SHA=$GITHUB_SHA bash -s" <<'REMOTE'
           set -euo pipefail
-          git -C ~/blog/app pull --ff-only
-          ~/blog/app/deploy/build.sh
+          git -C ~/blog/app fetch -q origin
+          git -C ~/blog/app show "$SHA:deploy/build.sh" | sh -s "$SHA"
           REMOTE
