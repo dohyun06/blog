@@ -1,133 +1,67 @@
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "../types"
-import style from "../styles/listPage.scss"
-import { PageList, SortFn } from "../PageList"
 import { FullSlug, getAllSegmentPrefixes, resolveRelative, simplifySlug } from "../../util/path"
-import { QuartzPluginData } from "../../plugins/vfile"
-import { Root } from "hast"
-import { htmlToJsx } from "../../util/jsx"
-import { i18n } from "../../i18n"
-import { ComponentChildren } from "preact"
-import { concatenateResources } from "../../util/resources"
+import PostListConstructor from "../PostList"
+import { Badge, segments, sortedPosts } from "../posts"
 
-interface TagContentOptions {
-  sort?: SortFn
-  numPages: number
-}
+const PostList = PostListConstructor()
 
-const defaultOptions: TagContentOptions = {
-  numPages: 10,
-}
-
-export default ((opts?: Partial<TagContentOptions>) => {
-  const options: TagContentOptions = { ...defaultOptions, ...opts }
-
+export default (() => {
   const TagContent: QuartzComponent = (props: QuartzComponentProps) => {
-    const { tree, fileData, allFiles, cfg } = props
-    const slug = fileData.slug
+    const { fileData, allFiles } = props
+    const slug = fileData.slug!
 
-    if (!(slug?.startsWith("tags/") || slug === "tags")) {
+    if (!(slug.startsWith("tags/") || slug === "tags")) {
       throw new Error(`Component "TagContent" tried to render a non-tag page: ${slug}`)
     }
 
     const tag = simplifySlug(slug.slice("tags/".length) as FullSlug)
-    const allPagesWithTag = (tag: string) =>
-      allFiles.filter((file) =>
-        (file.frontmatter?.tags ?? []).flatMap(getAllSegmentPrefixes).includes(tag),
-      )
-
-    const content = (
-      (tree as Root).children.length === 0
-        ? fileData.description
-        : htmlToJsx(fileData.filePath!, tree)
-    ) as ComponentChildren
-    const cssClasses: string[] = fileData.frontmatter?.cssclasses ?? []
-    const classes = cssClasses.join(" ")
     if (tag === "/") {
-      const tags = [
-        ...new Set(
-          allFiles.flatMap((data) => data.frontmatter?.tags ?? []).flatMap(getAllSegmentPrefixes),
-        ),
-      ].sort((a, b) => a.localeCompare(b))
-      const tagItemMap: Map<string, QuartzPluginData[]> = new Map()
-      for (const tag of tags) {
-        tagItemMap.set(tag, allPagesWithTag(tag))
-      }
+      // index of lines: each tag with its post count and latest post
+      const posts = sortedPosts(allFiles)
+      const lines = new Map<string, ReturnType<typeof segments>[number]>()
+      for (const p of posts) for (const s of segments(p.frontmatter?.tags)) lines.set(s.tag, s)
+      const withTag = (t: string) =>
+        posts.filter((p) => (p.frontmatter?.tags ?? []).flatMap(getAllSegmentPrefixes).includes(t))
       return (
-        <div class="popover-hint">
-          <article class={classes}>
-            <p>{content}</p>
-          </article>
-          <p>{i18n(cfg.locale).pages.tagContent.totalTags({ count: tags.length })}</p>
-          <div>
-            {tags.map((tag) => {
-              const pages = tagItemMap.get(tag)!
-              const listProps = {
-                ...props,
-                allFiles: pages,
-              }
-
-              const contentPage = allFiles.filter((file) => file.slug === `tags/${tag}`).at(0)
-
-              const root = contentPage?.htmlAst
-              const content =
-                !root || root?.children.length === 0
-                  ? contentPage?.description
-                  : htmlToJsx(contentPage.filePath!, root)
-
-              const tagListingPage = `/tags/${tag}` as FullSlug
-              const href = resolveRelative(fileData.slug!, tagListingPage)
-
-              return (
-                <div>
-                  <h2>
-                    <a class="internal tag-link" href={href}>
-                      {tag}
+        <div class="tag-index">
+          <p class="summary">
+            태그 {lines.size}개 · 글 {posts.length}편
+          </p>
+          <ul>
+            {[...lines.values()]
+              .sort((a, b) => a.n - b.n || a.tag.localeCompare(b.tag))
+              .map((l) => {
+                const list = withTag(l.tag)
+                const parent = l.tag.slice(0, -l.name.length)
+                return (
+                  <li>
+                    <a href={resolveRelative(slug, `tags/${l.tag}` as FullSlug)}>
+                      <Badge n={l.n} color={l.color} />
+                      <strong>
+                        {parent && <span class="parent">{parent.replaceAll("/", " / ")}</span>}
+                        {l.name}
+                      </strong>
+                      <span class="count">{list.length}편</span>
                     </a>
-                  </h2>
-                  {content && <p>{content}</p>}
-                  <div class="page-listing">
-                    <p>
-                      {i18n(cfg.locale).pages.tagContent.itemsUnderTag({ count: pages.length })}
-                      {pages.length > options.numPages && (
-                        <>
-                          {" "}
-                          <span>
-                            {i18n(cfg.locale).pages.tagContent.showingFirst({
-                              count: options.numPages,
-                            })}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                    <PageList limit={options.numPages} {...listProps} sort={options?.sort} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )
-    } else {
-      const pages = allPagesWithTag(tag)
-      const listProps = {
-        ...props,
-        allFiles: pages,
-      }
-
-      return (
-        <div class="popover-hint">
-          <article class={classes}>{content}</article>
-          <div class="page-listing">
-            <p>{i18n(cfg.locale).pages.tagContent.itemsUnderTag({ count: pages.length })}</p>
-            <div>
-              <PageList {...listProps} sort={options?.sort} />
-            </div>
-          </div>
+                    {list[0] && (
+                      <p>
+                        <em>최신</em>
+                        <a class="internal" href={resolveRelative(slug, list[0].slug!)}>
+                          {list[0].frontmatter?.title}
+                        </a>
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
+          </ul>
         </div>
       )
     }
+
+    // a single tag looks like the home page with its tab selected
+    return <PostList {...props} />
   }
 
-  TagContent.css = concatenateResources(style, PageList.css)
   return TagContent
 }) satisfies QuartzComponentConstructor
