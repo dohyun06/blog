@@ -1,8 +1,9 @@
 name: deploy
 
+# main is developed on directly; publishing a GitHub release is what ships it
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
