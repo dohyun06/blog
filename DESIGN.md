@@ -10,7 +10,7 @@ obsidian-git 자동 commit ──push──▶  dohyun06/Obsidian  ◀──pull
                                                                    │
                                                                    ├─ collect.mjs : #blog 노트 + 참조 이미지만 content/로 복사
                                                                    ├─ quartz build : content/ → public/
-                                                                   └─ rsync public/ → /srv/blog/site
+                                                                   └─ rsync public/ → ~/blog/site
                                                                                          │
                                                          Caddy (기존 infra) /blog/* ─ file_server
 ```
@@ -88,38 +88,30 @@ blog/
 
 ### 4.1. 1회 설정
 
-1. GitHub `dohyun06/Obsidian`에 **read-only deploy key**를 등록하고 서버 `/srv/blog/vault`에 clone한다.
-2. 이 저장소를 `/srv/blog/app`에 clone한다.
-3. systemd timer를 설치한다.
-4. `infra/docker-compose.yml`의 caddy에 볼륨 `/srv/blog/site:/srv/blog:ro`를 추가한다.
-5. `infra/caddy/sites/portfolio.caddy`의 `dohyun06.is-a.dev` 블록, `handle` 앞에 추가한다.
+서버의 `~/infra`와 같은 사용자 홈에 `~/blog`를 둔다. 사용자는 `docker` 그룹에 속해 있어야 한다.
 
-```caddy
-redir /blog /blog/
-handle_path /blog/* {
-	root * /srv/blog
-	try_files {path} {path}.html {path}/index.html
-	file_server
-}
+```bash
+mkdir -p ~/blog/site                     # infra 배포 전에 만들어야 root 소유 폴더가 생기지 않는다
+git clone <deploy key로 접근하는 Obsidian 저장소 주소> ~/blog/vault
+git clone <이 저장소 주소> ~/blog/app
+mkdir -p ~/.config/systemd/user
+cp ~/blog/app/deploy/blog-build.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now blog-build.timer
+sudo loginctl enable-linger "$USER"      # 로그아웃 상태에서도 user timer가 돈다
 ```
 
-6. `docker compose up -d`로 caddy를 재생성한다 (볼륨 추가는 reload로 반영되지 않는다).
+1. GitHub `dohyun06/Obsidian`에 **read-only deploy key**를 등록한다.
+2. 위 명령을 실행한다. `rsync`와 `flock`(util-linux)이 서버에 있어야 한다.
+3. infra 저장소의 변경(`/blog` 라우팅, `../blog/site:/srv/blog:ro` 볼륨)을 push한다. GitHub Actions가 `docker compose up -d`로 caddy를 재생성한다.
 
 ### 4.2. build.sh
 
-```sh
-flock -n /tmp/blog-build.lock || exit 0          # 이전 빌드가 아직 돌면 건너뛴다
-git -C /srv/blog/vault pull --ff-only
-[ "$(git -C /srv/blog/vault rev-parse HEAD)" = "$(cat .last-built 2>/dev/null)" ] && exit 0
-docker run --rm -v /srv/blog:/srv/blog -w /srv/blog/app node:22-alpine \
-  sh -c "npm ci && node scripts/collect.mjs /srv/blog/vault && npx quartz build"
-rsync -a --delete public/ /srv/blog/site/
-git -C /srv/blog/vault rev-parse HEAD > .last-built
-```
+`deploy/build.sh`가 vault를 pull하고, vault와 이 저장소의 HEAD가 지난 빌드와 같으면 끝낸다. 다르면 `node:22-alpine` 컨테이너에서 `collect.mjs`와 Quartz 빌드를 돌리고 `public/`을 `~/blog/site`로 rsync한다. `flock`으로 겹치는 실행을 막는다.
 
 - Node를 서버에 설치하지 않고 컨테이너로 빌드한다. 서버의 다른 서비스도 전부 docker다.
 - 빌드가 실패하면 rsync까지 가지 않으므로 이전 사이트가 그대로 남는다.
-- obsidian-git이 몇 분마다 commit하므로, vault HEAD가 같으면 빌드를 건너뛴다.
+- obsidian-git이 몇 분마다 commit하므로, vault와 이 저장소의 HEAD가 같으면 빌드를 건너뛴다.
   (shortcut: 비게시 노트만 바뀐 commit에도 빌드가 돈다. 서버 부하가 문제가 되면 collect 결과의 hash를 비교한다.)
 
 ## 5. 작업 순서
@@ -140,7 +132,7 @@ git -C /srv/blog/vault rev-parse HEAD > .last-built
 
 ## 7. 현재 상태와 위험
 
-- **vault에 `#blog` 노트가 아직 하나도 없다.** frontmatter 태그도 0개. 그래서 위젯·첨부 사용량은 측정할 대상이 없다.
+- 태그는 Obsidian처럼 대소문자를 구분하지 않는다. 그래서 `4. Archive/Club/Infoteam/Blog/`의 `#Blog` 글 3개가 게시 대상이 된다.
 - vault 노트 453개 중 243개에 dataview 블록, 185개에 수식이 있다. 블로그 글에도 들어갈 가능성이 높다. 수식은 Quartz가 KaTeX로 렌더링하고, dataview는 위 규칙대로 지워진다.
 - `#blog` 노트가 비게시 노트를 `![[...]]`로 embed하면 그 부분이 사라진다. 글이 비어 보이면 dry-run 출력에서 확인한다.
 - deploy key는 vault 전체를 읽을 수 있다. 서버가 뚫리면 vault 전체가 노출된다 (지금도 sync-server가 같은 서버에 vault 내용을 갖고 있으므로 위험 수준은 비슷하다).
