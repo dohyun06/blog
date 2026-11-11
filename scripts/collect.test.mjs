@@ -66,7 +66,7 @@ test("collect copies only blog notes and their assets, unlinking private notes",
   assert.ok(!fs.existsSync(path.join(out, "Templates")))
   for (const f of ["Assets/pic.png", "Assets/md x.png", "A/100%.pdf"]) assert.ok(fs.existsSync(path.join(out, f)), f)
   assert.ok(!fs.existsSync(path.join(out, "Assets/unused.png")))
-  assert.match(fs.readFileSync(path.join(out, "index.md"), "utf8"), /\[\[A\/Post\|Post\]\]/)
+  assert.match(fs.readFileSync(path.join(out, "index.md"), "utf8"), /^---\ntitle: /)
 })
 
 test("exact paths win over the attachments folder", () => {
@@ -89,16 +89,6 @@ test("zero tagged notes unpublishes everything, but an empty vault is refused", 
   collect(root, out)
   assert.deepEqual(fs.readdirSync(out), ["index.md"])
   assert.throws(() => collect(vault({ "a.png": "" }), "/nonexistent"), /no notes found/)
-})
-
-test("index is ordered by the effective creation date", () => {
-  const root = vault({
-    "Old.md": "---\ncreated: 2020-01-01\n---\n#blog",
-    "New.md": "---\ncreated: 2026-10-01T13:51\n---\n#blog",
-  })
-  const out = path.join(root, "out")
-  collect(root, out)
-  assert.match(fs.readFileSync(path.join(out, "index.md"), "utf8"), /New[\s\S]*Old/)
 })
 
 test("addDates fills only missing date keys", () => {

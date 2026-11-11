@@ -154,12 +154,8 @@ export function addDates(text, { created, modified }) {
   return fm ? fm.replace(/^---\n/, `---\n${lines.join("\n")}\n`) + body : `---\n${lines.join("\n")}\n---\n${body}`
 }
 
-function indexPage(notes, createdAt) {
-  const byNewest = [...notes]
-    .sort((a, b) => createdAt.get(b) - createdAt.get(a))
-    .map((n) => `- [[${noteKey(n)}|${path.posix.basename(n, ".md")}]]`)
-  return `---\ntitle: Blog\n---\n\n${byNewest.join("\n")}\n`
-}
+// the home page lists posts itself (quartz/components/PostList.tsx), so the index only carries its title
+const INDEX_PAGE = "---\ntitle: 글\n---\n"
 
 export function collect(vault, out, { dryRun = false } = {}) {
   const files = listFiles(vault)
@@ -171,15 +167,11 @@ export function collect(vault, out, { dryRun = false } = {}) {
   const published = new Set(notes)
   const exists = new Set(files)
   const assets = new Set()
-  const createdAt = new Map()
   const outputs = notes.map((note) => {
     const src = read(path.join(vault, note))
     const r = transform(src, { resolve, published, exists, noteDir: path.posix.dirname(note) })
     r.assets.forEach((a) => assets.add(a))
-    const git = gitDates(vault, note)
-    const fm = frontmatterData(splitFrontmatter(src)[0])
-    createdAt.set(note, new Date(fm.created ?? fm.date ?? git.created ?? 0).getTime() || 0)
-    return [note, addDates(r.text, git)]
+    return [note, addDates(r.text, gitDates(vault, note))]
   })
 
   if (dryRun) {
@@ -199,7 +191,7 @@ export function collect(vault, out, { dryRun = false } = {}) {
   }
   outputs.forEach(([rel, text]) => write(rel, text))
   assets.forEach((rel) => write(rel))
-  if (!published.has("index.md")) fs.writeFileSync(path.join(out, "index.md"), indexPage(notes, createdAt))
+  if (!published.has("index.md")) fs.writeFileSync(path.join(out, "index.md"), INDEX_PAGE)
   console.log(`collected ${notes.length} notes, ${assets.size} assets → ${out}`)
 }
 
