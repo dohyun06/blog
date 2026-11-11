@@ -26,7 +26,8 @@ export const created = (f: QuartzPluginData) => f.dates?.created?.getTime() ?? 0
 // published posts, newest first
 export const sortedPosts = (allFiles: QuartzPluginData[]) =>
   allFiles
-    .filter((f) => f.slug !== "index" && f.frontmatter)
+    // folder and tag description pages are list pages, not posts
+    .filter((f) => f.frontmatter && !/(^|\/)index$/.test(f.slug!) && !f.slug!.startsWith("tags/"))
     .sort((a, b) => created(b) - created(a))
 
 export function Badge({ n, color }: { n: number; color: string }) {

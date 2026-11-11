@@ -2,8 +2,12 @@ import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } fro
 import { pathToRoot } from "../util/path"
 
 // brand and nav; the Search component sits next to it in the same <header>
-const SiteHeader: QuartzComponent = ({ fileData }: QuartzComponentProps) => {
-  const root = pathToRoot(fileData.slug!)
+const SiteHeader: QuartzComponent = ({ fileData, cfg }: QuartzComponentProps) => {
+  // the 404 page is served at any missing URL, so relative links would point at the wrong folder
+  const root =
+    fileData.slug === "404"
+      ? new URL(`https://${cfg.baseUrl ?? "example.com"}`).pathname.replace(/\/$/, "")
+      : pathToRoot(fileData.slug!)
   const onTags = fileData.slug?.startsWith("tags/")
   return (
     <div class="site-header">
