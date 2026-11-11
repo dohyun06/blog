@@ -99,7 +99,9 @@ export const CrawlLinks: QuartzTransformerPlugin<Partial<Options>> = (userOpts) 
                 }
 
                 // don't process external links or intra-document anchors
-                const isInternal = !(isAbsoluteUrl(dest) || dest.startsWith("#"))
+                // ofm tag links are already relative to root; rewriting them again escapes baseUrl
+                const isInternal =
+                  !(isAbsoluteUrl(dest) || dest.startsWith("#")) && !classes.includes("tag-link")
                 if (isInternal) {
                   dest = node.properties.href = transformLink(
                     file.data.slug!,
