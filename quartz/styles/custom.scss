@@ -102,8 +102,13 @@ body {
       height: auto;
       max-height: 100vh;
       overflow-y: auto;
+      scrollbar-width: none;
       padding: 88px 0 32px;
       align-self: start;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
     }
 
     & .page-header {
