@@ -8,7 +8,7 @@ import * as Plugin from "./quartz/plugins"
  */
 const config: QuartzConfig = {
   configuration: {
-    pageTitle: "dohyun06 blog",
+    pageTitle: "김도현 블로그",
     pageTitleSuffix: "",
     enableSPA: true,
     enablePopovers: true,
@@ -18,23 +18,24 @@ const config: QuartzConfig = {
     ignorePatterns: ["private", "templates", ".obsidian"],
     defaultDateType: "created",
     theme: {
-      fontOrigin: "googleFonts",
+      fontOrigin: "local",
       cdnCaching: true,
       typography: {
-        header: "Noto Sans KR",
-        body: "Noto Sans KR",
-        code: "IBM Plex Mono",
+        // Pretendard is loaded in custom.scss, same as the portfolio
+        header: "Pretendard",
+        body: "Pretendard",
+        code: "JetBrains Mono",
       },
       colors: {
         lightMode: {
-          light: "#faf8f8",
-          lightgray: "#e5e5e5",
-          gray: "#b8b8b8",
-          darkgray: "#4e4e4e",
-          dark: "#2b2b2b",
-          secondary: "#284b63",
-          tertiary: "#84a59d",
-          highlight: "rgba(143, 159, 169, 0.15)",
+          light: "#ffffff",
+          lightgray: "#e5e7eb",
+          gray: "#9ca3af",
+          darkgray: "#4b5563",
+          dark: "#111827",
+          secondary: "#0052a4",
+          tertiary: "#003f80",
+          highlight: "rgba(0, 82, 164, 0.07)",
           textHighlight: "#fff23688",
         },
         darkMode: {
