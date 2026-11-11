@@ -8,9 +8,15 @@ import { isBlog, collect } from "./collect.mjs"
 test("isBlog reads frontmatter and inline tags, ignoring code", () => {
   assert.ok(isBlog("---\ntags:\n  - blog\n---\nhi"))
   assert.ok(isBlog("---\ntags: [x, blog/dev]\n---\nhi"))
+  assert.ok(isBlog("---\ntags: BLOG\n---\nhi"))
   assert.ok(isBlog("text #blog more"))
-  assert.ok(!isBlog("`#blog` and\n```\n#blog\n```"))
+  assert.ok(isBlog("text #blog, more"))
+  assert.ok(isBlog("#Blog/dev"))
+  assert.ok(!isBlog("`#blog` and ``a #blog b`` and\n```\n#blog\n```"))
+  assert.ok(!isBlog("~~~~\n#blog\n~~~~"))
+  assert.ok(!isBlog("```\nunclosed fence\n#blog"))
   assert.ok(!isBlog("#blogger #notblog"))
+  assert.ok(!isBlog("---\ndescription: |\n  #blog\n---\nhi"))
 })
 
 function vault(files) {
@@ -25,16 +31,18 @@ function vault(files) {
 test("collect copies only blog notes and their assets, unlinking private notes", () => {
   const root = vault({
     "A/Post.md": [
-      "---\ntags: [blog]\n---",
-      "#blog see [[Other]] and [[Private#H|secret]] and [[Private]]",
-      "![[Private]]![[pic.png]]![](../Assets/md.png)",
-      "```dataviewjs\nx\n```",
+      "---\ntags: [blog]\naliases:\n  - blog\n---",
+      "#blog see [[Other]] and [[Deep/Other#H|o]] and [[Private#H|secret]] and [[Private]]",
+      "![[Private]]![[pic.png|300]]![](../Assets/md%20x.png)![](Private.md)[deck](100%.pdf)",
+      "~~~dataviewjs\nx\n~~~",
+      "```` dataview\ny\n````",
       "`[[Private]]`",
-    ].join("\n"),
-    "B/Other.md": "#blog other",
+    ].join("\r\n"),
+    "B/Deep/Other.md": "#blog other",
     "B/Private.md": "private",
+    "A/100%.pdf": "pdf",
     "Assets/pic.png": "p",
-    "Assets/md.png": "m",
+    "Assets/md x.png": "m",
     "Assets/unused.png": "u",
     "Templates/T.md": "#blog template",
   })
@@ -42,18 +50,30 @@ test("collect copies only blog notes and their assets, unlinking private notes",
   collect(root, out)
 
   const post = fs.readFileSync(path.join(out, "A/Post.md"), "utf8")
-  assert.match(post, /tags: \[\]/)
-  assert.match(post, /see \[\[Other\]\] and secret and Private\n/)
-  assert.match(post, /^!\[\[pic\.png\]\]!\[\]\(\.\.\/Assets\/md\.png\)$/m)
-  assert.ok(!post.includes("dataviewjs") && !post.includes("#blog"))
+  assert.match(post, /tags: \[\]\naliases:\n  - blog\n/)
+  assert.match(post, /see \[\[B\/Deep\/Other\|Other\]\] and \[\[B\/Deep\/Other#H\|o\]\] and secret and Private\n/)
+  assert.match(post, /^!\[\[Assets\/pic\.png\|300\]\]!\[\]\(\.\.\/Assets\/md%20x\.png\)!\[\]\(Private\.md\)/m)
+  assert.ok(!/dataview|#blog|\r/.test(post))
   assert.match(post, /`\[\[Private\]\]`/)
 
-  assert.ok(fs.existsSync(path.join(out, "B/Other.md")))
+  assert.ok(fs.existsSync(path.join(out, "B/Deep/Other.md")))
   assert.ok(!fs.existsSync(path.join(out, "B/Private.md")))
   assert.ok(!fs.existsSync(path.join(out, "Templates")))
-  assert.ok(fs.existsSync(path.join(out, "Assets/pic.png")) && fs.existsSync(path.join(out, "Assets/md.png")))
+  for (const f of ["Assets/pic.png", "Assets/md x.png", "A/100%.pdf"]) assert.ok(fs.existsSync(path.join(out, f)), f)
   assert.ok(!fs.existsSync(path.join(out, "Assets/unused.png")))
   assert.match(fs.readFileSync(path.join(out, "index.md"), "utf8"), /\[\[A\/Post\|Post\]\]/)
+})
+
+test("exact paths win over the attachments folder", () => {
+  const root = vault({
+    "Post.md": "#blog ![[Public/figure.png]]",
+    "Public/figure.png": "public",
+    "Assets/Public/figure.png": "private",
+  })
+  const out = path.join(root, "out")
+  collect(root, out)
+  assert.ok(fs.existsSync(path.join(out, "Public/figure.png")))
+  assert.ok(!fs.existsSync(path.join(out, "Assets")))
 })
 
 test("collect refuses an empty result", () => {

@@ -5,23 +5,55 @@ import matter from "gray-matter"
 
 const EXCLUDED_DIRS = new Set(["Templates", "Excalidraw"])
 const ATTACHMENT_DIR = "Assets"
-const CODE = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/
+// fenced blocks (closed or running to EOF) and inline code spans of any backtick run length.
+// shortcut: indented code blocks are not detected, since this vault indents list items with tabs.
+const CODE = /^[ \t]*(`{3,}|~{3,}).*\n[\s\S]*?(?:^[ \t]*\1[`~]*[ \t]*$|$(?![\s\S]))|(`+)[^\n]*?[^`\n]\2(?!`)/gm
+const DATAVIEW = /^[ \t]*(`{3,}|~{3,})[ \t]*dataview(js)?\b/i
 const WIKILINK = /(!?)\[\[([^\]|#]*)(#[^\]|]*)?(?:\|([^\]]*))?\]\]/g
-const MD_IMAGE = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
-const INLINE_BLOG_TAG = /(^|\s)#blog(?:\/[^\s#]*)?(?=\s|$)/g
-const HAS_INLINE_BLOG_TAG = new RegExp(INLINE_BLOG_TAG.source)
-const FM_BLOG_ITEM = /^\s*-\s*["']?blog(?:\/[^\s"']*)?["']?\s*$\n?/gm
+const MD_LINK = /!?\[[^\]]*\]\(<?([^)\s>]+)>?(?:\s+"[^"]*")?\)/g
+const TAG_CHAR = "[\\p{L}\\p{N}_\\-/]"
+const INLINE_BLOG_TAG = new RegExp(`(^|\\s)#blog(?:/${TAG_CHAR}*)?(?!${TAG_CHAR})`, "giu")
+const HAS_INLINE_BLOG_TAG = new RegExp(INLINE_BLOG_TAG.source, "iu")
 
-const isBlogTag = (t) => t === "blog" || String(t).startsWith("blog/")
+const isBlogTag = (t) => /^#?blog(\/|$)/i.test(String(t).trim().replace(/^["']|["']$/g, ""))
+const read = (file) => fs.readFileSync(file, "utf8").replace(/\r\n?/g, "\n")
+const noteKey = (f) => (f.endsWith(".md") ? f.slice(0, -3) : f)
+
+function mapCode(text, onText, onCode) {
+  let out = ""
+  let last = 0
+  for (const m of text.matchAll(CODE)) {
+    out += onText(text.slice(last, m.index)) + onCode(m[0])
+    last = m.index + m[0].length
+  }
+  return out + onText(text.slice(last))
+}
+
+function splitFrontmatter(text) {
+  const fm = text.match(/^---\n[\s\S]*?\n---(?:\n|$)/)?.[0] ?? ""
+  return [fm, text.slice(fm.length)]
+}
 
 export function isBlog(text) {
-  let tags = []
+  const [fm, body] = splitFrontmatter(text)
   try {
-    tags = [matter(text).data.tags ?? []].flat()
+    if ([matter(fm).data.tags ?? []].flat().some(isBlogTag)) return true
   } catch {}
-  if (tags.some(isBlogTag)) return true
-  const body = text.replace(/^---\n[\s\S]*?\n---/, "")
-  return body.split(CODE).some((part, i) => i % 2 === 0 && HAS_INLINE_BLOG_TAG.test(part))
+  let found = false
+  mapCode(body, (t) => ((found ||= HAS_INLINE_BLOG_TAG.test(t)), t), (c) => c)
+  return found
+}
+
+// removes blog entries from the tags property only, leaving other YAML untouched
+function stripFrontmatterTags(fm) {
+  return fm
+    .replace(/^(tags?:[ \t]*\n)((?:[ \t]*-.*\n)*)/m, (_, head, items) =>
+      head + items.split("\n").filter((l) => !isBlogTag(l.replace(/^[ \t]*-/, ""))).join("\n"),
+    )
+    .replace(/^(tags?:[ \t]*\[)(.*)\]/m, (_, head, items) =>
+      head + items.split(",").filter((t) => !isBlogTag(t)).join(",").trim() + "]",
+    )
+    .replace(/^(tags?:)[ \t]+\S.*$/m, (line, head) => (isBlogTag(line.slice(head.length)) ? head : line))
 }
 
 export function listFiles(root, dir = "") {
@@ -33,71 +65,74 @@ export function listFiles(root, dir = "") {
   })
 }
 
-// Obsidian-style lookup: exact path, path suffix, then basename; attachments folder wins ties.
+// Obsidian-style lookup: relative or exact path first, then path suffix or basename (attachments folder wins ties).
 export function makeResolver(files) {
-  const key = (f) => (f.endsWith(".md") ? f.slice(0, -3) : f)
-  return (target) => {
-    const t = target.trim().replace(/\.md$/, "")
-    const hits = files.filter((f) => key(f) === t || key(f).endsWith("/" + t))
+  return (target, noteDir = "") => {
+    let t = target.trim().replace(/\.md$/, "")
+    if (t.startsWith("./") || t.startsWith("../")) t = path.posix.join(noteDir, t)
+    const exact = files.find((f) => noteKey(f) === t)
+    if (exact) return exact
+    const hits = files.filter((f) => noteKey(f).endsWith("/" + t))
     return hits.find((f) => f.startsWith(ATTACHMENT_DIR + "/")) ?? hits.sort((a, b) => a.length - b.length)[0]
+  }
+}
+
+function safeDecode(s) {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
   }
 }
 
 export function transform(text, { resolve, published, exists, noteDir }) {
   const assets = new Set()
-  const fm = text.match(/^---\n[\s\S]*?\n---\n?/)?.[0] ?? ""
-  const frontmatter = fm
-    .replace(FM_BLOG_ITEM, "")
-    .replace(/^(tags:\s*\[)(.*)\]/m, (_, head, items) =>
-      head + items.split(",").filter((t) => !isBlogTag(t.trim().replace(/^["']|["']$/g, ""))).join(",").trim() + "]",
-    )
+  const [fm, body] = splitFrontmatter(text)
 
   const rewrite = (part) =>
     part
-      .replace(WIKILINK, (all, bang, target, heading, alias) => {
+      .replace(WIKILINK, (all, bang, target, heading = "", alias) => {
         if (!target) return all
-        const file = resolve(target)
-        if (file && !file.endsWith(".md")) return assets.add(file), all
-        if (file && published.has(file)) return all
-        return bang ? "" : (alias ?? path.posix.basename(target))
+        const file = resolve(target, noteDir)
+        const isAsset = file && !file.endsWith(".md")
+        if (isAsset) assets.add(file)
+        if (!isAsset && !(file && published.has(file))) return bang ? "" : (alias ?? path.posix.basename(target.trim()))
+        // full vault path, because Quartz cannot resolve Obsidian's partial paths
+        const label = alias ?? (bang ? undefined : path.posix.basename(target.trim()))
+        return `${bang}[[${noteKey(file)}${heading}${label === undefined ? "" : "|" + label}]]`
       })
-      .replace(MD_IMAGE, (all, src) => {
+      .replace(MD_LINK, (all, src) => {
         if (/^[a-z]+:/i.test(src)) return all
-        const decoded = decodeURIComponent(src)
+        const decoded = safeDecode(src)
         const file = [path.posix.join(noteDir, decoded), decoded].find((f) => exists.has(f))
-        if (file) assets.add(file)
+        if (file && !file.endsWith(".md")) assets.add(file)
         return all
       })
       .replace(INLINE_BLOG_TAG, "$1")
 
-  const body = text
-    .slice(fm.length)
-    .split(CODE)
-    .map((part, i) => (i % 2 === 0 ? rewrite(part) : /^```dataview(js)?\b/.test(part) ? "" : part))
-    .join("")
-  return { text: frontmatter + body, assets }
+  const out = mapCode(body, rewrite, (c) => (DATAVIEW.test(c) ? "" : c))
+  return { text: stripFrontmatterTags(fm) + out, assets }
 }
 
 function indexPage(vault, notes) {
   const byNewest = notes
     .map((n) => [n, fs.statSync(path.join(vault, n)).mtimeMs])
     .sort((a, b) => b[1] - a[1])
-    .map(([n]) => `- [[${n.slice(0, -3)}|${path.posix.basename(n, ".md")}]]`)
+    .map(([n]) => `- [[${noteKey(n)}|${path.posix.basename(n, ".md")}]]`)
   return `---\ntitle: Blog\n---\n\n${byNewest.join("\n")}\n`
 }
 
 export function collect(vault, out, { dryRun = false } = {}) {
   const files = listFiles(vault)
   const resolve = makeResolver(files)
-  const notes = files.filter((f) => f.endsWith(".md") && isBlog(fs.readFileSync(path.join(vault, f), "utf8")))
+  const notes = files.filter((f) => f.endsWith(".md") && isBlog(read(path.join(vault, f))))
   if (notes.length === 0) throw new Error(`no #blog notes found in ${vault}`)
 
   const published = new Set(notes)
   const exists = new Set(files)
   const assets = new Set()
   const outputs = notes.map((note) => {
-    const src = fs.readFileSync(path.join(vault, note), "utf8")
-    const r = transform(src, { resolve, published, exists, noteDir: path.posix.dirname(note) })
+    const r = transform(read(path.join(vault, note)), { resolve, published, exists, noteDir: path.posix.dirname(note) })
     r.assets.forEach((a) => assets.add(a))
     return [note, r.text]
   })
