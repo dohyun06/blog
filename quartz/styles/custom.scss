@@ -322,7 +322,13 @@ body {
     gap: 32px;
     margin: 28px 0 56px;
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
     border-bottom: 1px solid var(--lightgray);
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     & a {
       position: relative;
