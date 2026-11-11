@@ -1,11 +1,11 @@
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "./types"
-import { LineTags } from "./posts"
+import { LineTags, lineNumbers } from "./posts"
 
 const fmt = (d: Date, withYear: boolean) =>
   `${withYear ? `${d.getFullYear()}년 ` : ""}${d.getMonth() + 1}월 ${d.getDate()}일`
 
-const PostTags: QuartzComponent = ({ fileData }: QuartzComponentProps) => (
-  <LineTags slug={fileData.slug!} tags={fileData.frontmatter?.tags} />
+const PostTags: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps) => (
+  <LineTags slug={fileData.slug!} tags={fileData.frontmatter?.tags} lines={lineNumbers(allFiles)} />
 )
 
 // "2026년 10월 1일 작성 · 10월 26일 수정"; the edit date only shows when it is a different day

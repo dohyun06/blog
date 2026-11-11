@@ -282,16 +282,9 @@ body {
   height: 24px;
   border-radius: 50%;
   background: var(--line);
-  color: #fff;
   font-size: 0.8125rem;
   font-weight: 800;
   line-height: 1;
-  &[data-n="1"] {
-    color: var(--line-1-ink);
-  }
-  &[data-n="5"] {
-    color: #000;
-  }
 }
 
 .line-tags {

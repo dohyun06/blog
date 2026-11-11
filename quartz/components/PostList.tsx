@@ -1,12 +1,13 @@
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "./types"
 import { FullSlug, getAllSegmentPrefixes, pathToRoot, resolveRelative } from "../util/path"
-import { Badge, LineTags, segments, sortedPosts } from "./posts"
+import { Badge, LineTags, lineNumbers, segments, sortedPosts } from "./posts"
 
 // home and single-tag pages: tag tabs, then posts grouped by year on a route line
 const PostList: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps) => {
   const slug = fileData.slug!
   const active = slug.startsWith("tags/") ? slug.slice("tags/".length) : undefined
   const posts = sortedPosts(allFiles)
+  const lines = lineNumbers(allFiles)
   const shown = active
     ? posts.filter((p) =>
         (p.frontmatter?.tags ?? []).flatMap(getAllSegmentPrefixes).includes(active),
@@ -15,7 +16,7 @@ const PostList: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps)
 
   const tabs = new Map<string, ReturnType<typeof segments>[number] & { count: number }>()
   for (const p of posts)
-    for (const s of segments(p.frontmatter?.tags))
+    for (const s of segments(p.frontmatter?.tags, lines))
       tabs.set(s.tag, { ...s, count: (tabs.get(s.tag)?.count ?? 0) + 1 })
 
   const years = new Map<number, typeof posts>()
@@ -37,7 +38,7 @@ const PostList: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps)
               class={t.tag === active ? "tag-link active" : "tag-link"}
               href={resolveRelative(slug, `tags/${t.tag}` as FullSlug)}
             >
-              <Badge n={t.n} color={t.color} />
+              <Badge {...t} />
               {t.name}
               <span class="count">{t.count}</span>
             </a>
@@ -62,7 +63,7 @@ const PostList: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps)
                     </a>
                   </h3>
                   {p.description && <p>{p.description}</p>}
-                  <LineTags slug={slug} tags={p.frontmatter?.tags} />
+                  <LineTags slug={slug} tags={p.frontmatter?.tags} lines={lines} />
                 </li>
               )
             })}

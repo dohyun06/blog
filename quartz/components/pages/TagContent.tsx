@@ -1,7 +1,7 @@
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "../types"
 import { FullSlug, getAllSegmentPrefixes, resolveRelative, simplifySlug } from "../../util/path"
 import PostListConstructor from "../PostList"
-import { Badge, segments, sortedPosts } from "../posts"
+import { Badge, lineNumbers, segments, sortedPosts } from "../posts"
 
 const PostList = PostListConstructor()
 
@@ -18,8 +18,10 @@ export default (() => {
     if (tag === "/") {
       // index of lines: each tag with its post count and latest post
       const posts = sortedPosts(allFiles)
+      const numbers = lineNumbers(allFiles)
       const lines = new Map<string, ReturnType<typeof segments>[number]>()
-      for (const p of posts) for (const s of segments(p.frontmatter?.tags)) lines.set(s.tag, s)
+      for (const p of posts)
+        for (const s of segments(p.frontmatter?.tags, numbers)) lines.set(s.tag, s)
       const withTag = (t: string) =>
         posts.filter((p) => (p.frontmatter?.tags ?? []).flatMap(getAllSegmentPrefixes).includes(t))
       return (
@@ -36,7 +38,7 @@ export default (() => {
                 return (
                   <li>
                     <a href={resolveRelative(slug, `tags/${l.tag}` as FullSlug)}>
-                      <Badge n={l.n} color={l.color} />
+                      <Badge {...l} />
                       <strong>
                         {parent && <span class="parent">{parent.replaceAll("/", " / ")}</span>}
                         {l.name}
