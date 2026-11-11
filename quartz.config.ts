@@ -16,7 +16,7 @@ const config: QuartzConfig = {
     locale: "ko-KR",
     baseUrl: "dohyun06.is-a.dev/blog",
     ignorePatterns: ["private", "templates", ".obsidian"],
-    defaultDateType: "modified",
+    defaultDateType: "created",
     theme: {
       fontOrigin: "googleFonts",
       cdnCaching: true,
