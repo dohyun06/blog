@@ -16,7 +16,7 @@ const PostList: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps)
   const tabs = new Map<string, ReturnType<typeof segments>[number] & { count: number }>()
   for (const p of posts)
     for (const s of segments(p.frontmatter?.tags))
-      tabs.set(s.name, { ...s, count: (tabs.get(s.name)?.count ?? 0) + 1 })
+      tabs.set(s.tag, { ...s, count: (tabs.get(s.tag)?.count ?? 0) + 1 })
 
   const years = new Map<number, typeof posts>()
   for (const p of shown) {

@@ -776,7 +776,7 @@ figure[data-rehype-pretty-code-figure] {
     font-weight: 700;
   }
   & .parent {
-    color: var(--gray);
+    color: var(--darkgray);
     font-weight: 500;
   }
   & .count {
@@ -790,15 +790,15 @@ figure[data-rehype-pretty-code-figure] {
     font-size: 0.875rem;
     & em {
       margin-right: 8px;
-      color: var(--gray);
+      color: var(--darkgray);
       font-style: normal;
     }
     & a {
-      color: var(--darkgray);
+      color: var(--dark);
       font-weight: 500;
       background: none;
       &:hover {
-        color: var(--dark);
+        color: var(--secondary);
       }
     }
   }
