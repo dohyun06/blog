@@ -3,11 +3,13 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
+import remarkParse from "remark-parse"
+import { unified } from "unified"
+import { EXIT, visit } from "unist-util-visit"
 
 const EXCLUDED_DIRS = new Set(["Templates", "Excalidraw"])
 const ATTACHMENT_DIR = "Assets"
-// fenced blocks (closed or running to EOF) and inline code spans of any backtick run length.
-// shortcut: indented code blocks are not detected, since this vault indents list items with tabs.
+// rewriting only: fenced blocks and inline code spans. Publishing decisions use the Markdown parser instead.
 const CODE = /^[ \t]*(`{3,}|~{3,}).*\n[\s\S]*?(?:^[ \t]*\1[`~]*[ \t]*$|$(?![\s\S]))|(`+)[^\n]*?[^`\n]\2(?!`)/gm
 const DATAVIEW = /^[ \t]*(`{3,}|~{3,})[ \t]*dataview(js)?\b/i
 const WIKILINK = /(!?)\[\[([^\]|#]*)(#[^\]|]*)?(?:\|([^\]]*))?\]\]/g
@@ -15,6 +17,8 @@ const MD_LINK = /!?\[[^\]]*\]\(<?([^)\s>]+)>?(?:\s+"[^"]*")?\)/g
 const TAG_CHAR = "[\\p{L}\\p{N}_\\-/]"
 const INLINE_BLOG_TAG = new RegExp(`(^|\\s)#blog(?:/${TAG_CHAR}*)?(?!${TAG_CHAR})`, "giu")
 const HAS_INLINE_BLOG_TAG = new RegExp(INLINE_BLOG_TAG.source, "iu")
+
+const markdown = unified().use(remarkParse)
 
 const isBlogTag = (t) => /^#?blog(\/|$)/i.test(String(t).trim().replace(/^["']|["']$/g, ""))
 const read = (file) => fs.readFileSync(file, "utf8").replace(/\r\n?/g, "\n")
@@ -35,13 +39,22 @@ function splitFrontmatter(text) {
   return [fm, text.slice(fm.length)]
 }
 
+function frontmatterData(fm) {
+  try {
+    return matter(fm).data
+  } catch {
+    return {}
+  }
+}
+
 export function isBlog(text) {
   const [fm, body] = splitFrontmatter(text)
-  try {
-    if ([matter(fm).data.tags ?? []].flat().some(isBlogTag)) return true
-  } catch {}
+  if ([frontmatterData(fm).tags ?? []].flat().some(isBlogTag)) return true
+  // text nodes only, so tags inside any code (fenced, indented, inline, nested in quotes or lists) never count
   let found = false
-  mapCode(body, (t) => ((found ||= HAS_INLINE_BLOG_TAG.test(t)), t), (c) => c)
+  visit(markdown.parse(body), "text", (node) => {
+    if (HAS_INLINE_BLOG_TAG.test(node.value)) return (found = true), EXIT
+  })
   return found
 }
 
@@ -131,18 +144,19 @@ function gitDates(vault, rel) {
 
 export function addDates(text, { created, modified }) {
   const [fm, body] = splitFrontmatter(text)
-  const has = (keys) => new RegExp(`^(${keys}):`, "m").test(fm)
+  const data = frontmatterData(fm)
+  const has = (keys) => keys.some((k) => k in data)
   const lines = [
-    created && !has("created|date") && `created: ${created}`,
-    modified && !has("modified|lastmod|updated|last-modified") && `modified: ${modified}`,
+    created && !has(["created", "date"]) && `created: ${created}`,
+    modified && !has(["modified", "lastmod", "updated", "last-modified"]) && `modified: ${modified}`,
   ].filter(Boolean)
   if (lines.length === 0) return text
   return fm ? fm.replace(/^---\n/, `---\n${lines.join("\n")}\n`) + body : `---\n${lines.join("\n")}\n---\n${body}`
 }
 
-function indexPage(notes, dates) {
+function indexPage(notes, createdAt) {
   const byNewest = [...notes]
-    .sort((a, b) => (dates.get(b).created ?? "").localeCompare(dates.get(a).created ?? ""))
+    .sort((a, b) => createdAt.get(b) - createdAt.get(a))
     .map((n) => `- [[${noteKey(n)}|${path.posix.basename(n, ".md")}]]`)
   return `---\ntitle: Blog\n---\n\n${byNewest.join("\n")}\n`
 }
@@ -151,16 +165,21 @@ export function collect(vault, out, { dryRun = false } = {}) {
   const files = listFiles(vault)
   const resolve = makeResolver(files)
   const notes = files.filter((f) => f.endsWith(".md") && isBlog(read(path.join(vault, f))))
-  if (notes.length === 0) throw new Error(`no #blog notes found in ${vault}`)
+  // an empty vault means a broken clone; zero tagged notes is a valid state that must unpublish everything
+  if (!files.some((f) => f.endsWith(".md"))) throw new Error(`no notes found in ${vault}`)
 
   const published = new Set(notes)
   const exists = new Set(files)
   const assets = new Set()
-  const dates = new Map(notes.map((n) => [n, gitDates(vault, n)]))
+  const createdAt = new Map()
   const outputs = notes.map((note) => {
-    const r = transform(read(path.join(vault, note)), { resolve, published, exists, noteDir: path.posix.dirname(note) })
+    const src = read(path.join(vault, note))
+    const r = transform(src, { resolve, published, exists, noteDir: path.posix.dirname(note) })
     r.assets.forEach((a) => assets.add(a))
-    return [note, addDates(r.text, dates.get(note))]
+    const git = gitDates(vault, note)
+    const fm = frontmatterData(splitFrontmatter(src)[0])
+    createdAt.set(note, new Date(fm.created ?? fm.date ?? git.created ?? 0).getTime() || 0)
+    return [note, addDates(r.text, git)]
   })
 
   if (dryRun) {
@@ -170,6 +189,7 @@ export function collect(vault, out, { dryRun = false } = {}) {
   }
 
   fs.rmSync(out, { recursive: true, force: true })
+  fs.mkdirSync(out, { recursive: true })
   const write = (rel, data) => {
     const dest = path.join(out, rel)
     fs.mkdirSync(path.dirname(dest), { recursive: true })
@@ -179,7 +199,7 @@ export function collect(vault, out, { dryRun = false } = {}) {
   }
   outputs.forEach(([rel, text]) => write(rel, text))
   assets.forEach((rel) => write(rel))
-  if (!published.has("index.md")) fs.writeFileSync(path.join(out, "index.md"), indexPage(notes, dates))
+  if (!published.has("index.md")) fs.writeFileSync(path.join(out, "index.md"), indexPage(notes, createdAt))
   console.log(`collected ${notes.length} notes, ${assets.size} assets → ${out}`)
 }
 

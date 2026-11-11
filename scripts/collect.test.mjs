@@ -17,6 +17,10 @@ test("isBlog reads frontmatter and inline tags, ignoring code", () => {
   assert.ok(!isBlog("~~~~\n#blog\n~~~~"))
   assert.ok(!isBlog("```\nunclosed fence\n#blog"))
   assert.ok(!isBlog("#blogger #notblog"))
+  assert.ok(!isBlog("a `x\n#blog` b"))
+  assert.ok(!isBlog("> ```\n> #blog\n> ```"))
+  assert.ok(!isBlog("para\n\n    #blog in indented code"))
+  assert.ok(isBlog("- item\n\t- nested #blog"))
   assert.ok(!isBlog("---\ndescription: |\n  #blog\n---\nhi"))
 })
 
@@ -77,8 +81,24 @@ test("exact paths win over the attachments folder", () => {
   assert.ok(!fs.existsSync(path.join(out, "Assets")))
 })
 
-test("collect refuses an empty result", () => {
-  assert.throws(() => collect(vault({ "x.md": "nothing" }), "/nonexistent"), /no #blog notes/)
+test("zero tagged notes unpublishes everything, but an empty vault is refused", () => {
+  const root = vault({ "x.md": "nothing" })
+  const out = path.join(root, "out")
+  fs.mkdirSync(path.join(out, "old"), { recursive: true })
+  fs.writeFileSync(path.join(out, "old/Post.md"), "stale")
+  collect(root, out)
+  assert.deepEqual(fs.readdirSync(out), ["index.md"])
+  assert.throws(() => collect(vault({ "a.png": "" }), "/nonexistent"), /no notes found/)
+})
+
+test("index is ordered by the effective creation date", () => {
+  const root = vault({
+    "Old.md": "---\ncreated: 2020-01-01\n---\n#blog",
+    "New.md": "---\ncreated: 2026-10-01T13:51\n---\n#blog",
+  })
+  const out = path.join(root, "out")
+  collect(root, out)
+  assert.match(fs.readFileSync(path.join(out, "index.md"), "utf8"), /New[\s\S]*Old/)
 })
 
 test("addDates fills only missing date keys", () => {
@@ -86,6 +106,7 @@ test("addDates fills only missing date keys", () => {
   assert.equal(addDates("body", d), "---\ncreated: 2026-01-01\nmodified: 2026-02-02\n---\nbody")
   assert.equal(addDates("---\ncreated: 2025-05-05\nupdated: x\n---\nb", d), "---\ncreated: 2025-05-05\nupdated: x\n---\nb")
   assert.equal(addDates("---\ntags: [a]\n---\nb", {}), "---\ntags: [a]\n---\nb")
+  assert.ok(!addDates('---\n"created": 2020-01-01\n---\nb', d).includes("created: 2026"))
 })
 
 test("collect takes dates from the first and last commit", () => {
