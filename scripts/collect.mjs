@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -114,11 +115,35 @@ export function transform(text, { resolve, published, exists, noteDir }) {
   return { text: stripFrontmatterTags(fm) + out, assets }
 }
 
-function indexPage(vault, notes) {
-  const byNewest = notes
-    .map((n) => [n, fs.statSync(path.join(vault, n)).mtimeMs])
-    .sort((a, b) => b[1] - a[1])
-    .map(([n]) => `- [[${noteKey(n)}|${path.posix.basename(n, ".md")}]]`)
+// file creation time is lost in a git clone, so fall back to the first and last commit touching the note
+function gitDates(vault, rel) {
+  try {
+    const log = execFileSync("git", ["-C", vault, "log", "--follow", "--format=%aI", "--", rel], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+    const dates = log.trim().split("\n").filter(Boolean)
+    return { created: dates.at(-1), modified: dates[0] }
+  } catch {
+    return {}
+  }
+}
+
+export function addDates(text, { created, modified }) {
+  const [fm, body] = splitFrontmatter(text)
+  const has = (keys) => new RegExp(`^(${keys}):`, "m").test(fm)
+  const lines = [
+    created && !has("created|date") && `created: ${created}`,
+    modified && !has("modified|lastmod|updated|last-modified") && `modified: ${modified}`,
+  ].filter(Boolean)
+  if (lines.length === 0) return text
+  return fm ? fm.replace(/^---\n/, `---\n${lines.join("\n")}\n`) + body : `---\n${lines.join("\n")}\n---\n${body}`
+}
+
+function indexPage(notes, dates) {
+  const byNewest = [...notes]
+    .sort((a, b) => (dates.get(b).created ?? "").localeCompare(dates.get(a).created ?? ""))
+    .map((n) => `- [[${noteKey(n)}|${path.posix.basename(n, ".md")}]]`)
   return `---\ntitle: Blog\n---\n\n${byNewest.join("\n")}\n`
 }
 
@@ -131,10 +156,11 @@ export function collect(vault, out, { dryRun = false } = {}) {
   const published = new Set(notes)
   const exists = new Set(files)
   const assets = new Set()
+  const dates = new Map(notes.map((n) => [n, gitDates(vault, n)]))
   const outputs = notes.map((note) => {
     const r = transform(read(path.join(vault, note)), { resolve, published, exists, noteDir: path.posix.dirname(note) })
     r.assets.forEach((a) => assets.add(a))
-    return [note, r.text]
+    return [note, addDates(r.text, dates.get(note))]
   })
 
   if (dryRun) {
@@ -153,7 +179,7 @@ export function collect(vault, out, { dryRun = false } = {}) {
   }
   outputs.forEach(([rel, text]) => write(rel, text))
   assets.forEach((rel) => write(rel))
-  if (!published.has("index.md")) fs.writeFileSync(path.join(out, "index.md"), indexPage(vault, notes))
+  if (!published.has("index.md")) fs.writeFileSync(path.join(out, "index.md"), indexPage(notes, dates))
   console.log(`collected ${notes.length} notes, ${assets.size} assets → ${out}`)
 }
 

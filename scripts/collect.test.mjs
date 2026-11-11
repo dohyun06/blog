@@ -3,7 +3,8 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { isBlog, collect } from "./collect.mjs"
+import { execFileSync } from "node:child_process"
+import { isBlog, collect, addDates } from "./collect.mjs"
 
 test("isBlog reads frontmatter and inline tags, ignoring code", () => {
   assert.ok(isBlog("---\ntags:\n  - blog\n---\nhi"))
@@ -78,4 +79,28 @@ test("exact paths win over the attachments folder", () => {
 
 test("collect refuses an empty result", () => {
   assert.throws(() => collect(vault({ "x.md": "nothing" }), "/nonexistent"), /no #blog notes/)
+})
+
+test("addDates fills only missing date keys", () => {
+  const d = { created: "2026-01-01", modified: "2026-02-02" }
+  assert.equal(addDates("body", d), "---\ncreated: 2026-01-01\nmodified: 2026-02-02\n---\nbody")
+  assert.equal(addDates("---\ncreated: 2025-05-05\nupdated: x\n---\nb", d), "---\ncreated: 2025-05-05\nupdated: x\n---\nb")
+  assert.equal(addDates("---\ntags: [a]\n---\nb", {}), "---\ntags: [a]\n---\nb")
+})
+
+test("collect takes dates from the first and last commit", () => {
+  const root = vault({ "Post.md": "#blog v1" })
+  const git = (args, date) =>
+    execFileSync("git", ["-C", root, ...args], {
+      env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+    })
+  git(["init", "-q"])
+  git(["add", "."])
+  git(["commit", "-qm", "a"], "2026-01-01T00:00:00+09:00")
+  fs.writeFileSync(path.join(root, "Post.md"), "#blog v2")
+  git(["commit", "-qam", "b"], "2026-03-03T00:00:00+09:00")
+  const out = path.join(root, "out")
+  collect(root, out)
+  const post = fs.readFileSync(path.join(out, "Post.md"), "utf8")
+  assert.match(post, /^---\ncreated: 2026-01-01T00:00:00\+09:00\nmodified: 2026-03-03T00:00:00\+09:00\n---\n/)
 })
