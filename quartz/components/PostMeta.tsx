@@ -8,19 +8,13 @@ const PostTags: QuartzComponent = ({ fileData, allFiles }: QuartzComponentProps)
   <LineTags slug={fileData.slug!} tags={fileData.frontmatter?.tags} lines={lineNumbers(allFiles)} />
 )
 
-// "2026년 10월 1일 작성 · 10월 26일 수정"; the edit date only shows when it is a different day
+// "2026년 10월 1일 작성"
 const PostMeta: QuartzComponent = ({ fileData }: QuartzComponentProps) => {
-  const { created, modified } = fileData.dates ?? {}
+  const created = fileData.dates?.created
   if (!created) return null
-  const edited = modified && fmt(modified, true) !== fmt(created, true)
   return (
     <p class="post-meta">
       <time datetime={created.toISOString()}>{fmt(created, true)} 작성</time>
-      {edited && (
-        <time datetime={modified.toISOString()}>
-          {fmt(modified, modified.getFullYear() !== created.getFullYear())} 수정
-        </time>
-      )}
     </p>
   )
 }
