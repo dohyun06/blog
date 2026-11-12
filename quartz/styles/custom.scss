@@ -704,6 +704,11 @@ figure[data-rehype-pretty-code-figure] {
   }
 }
 
+// KaTeX sizes Hangul with Latin metrics, so tall syllables poke above the box and overflow-y: hidden cut their top strokes
+.page article .katex-display {
+  padding: 0.2em 0;
+}
+
 // callouts: 4px line + 6% tint in the portfolio's line colours (danger red is the one exception)
 .page article .callout {
   margin: 24px 0;
